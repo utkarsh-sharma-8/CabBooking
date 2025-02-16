@@ -4,6 +4,8 @@ import React from 'react';
 import Auth from '../StartingScreens/AuthScreen/Auth';
 import Splash from '../StartingScreens/Splash';
 import FirstScreen from '../StartingScreens/FirstScreen/FirstScreen';
+import DriverVerification from '../DiverScreens/VerificationScreen/Verification';
+import DriverScreen from '../DiverScreens/DriverMainScreen/DriverScreen';
 
 const Stack=createNativeStackNavigator();
 const AppNavigator = () => {
@@ -13,7 +15,8 @@ const AppNavigator = () => {
             <Stack.Screen name="Splash" component={Splash} options={{headerShown:false}}/>
             <Stack.Screen name='Auth' component={Auth} options={{headerShown:false}}/>
             <Stack.Screen name='FirstScreen' component={FirstScreen} options={{headerShown:false}}/>
-
+            <Stack.Screen name='Verification' component ={DriverVerification} options={{headerShown:false}}/>
+            <Stack.Screen name='DriverScreen' component ={DriverScreen} options={{headerShown:false}}/>
         </Stack.Navigator>
     </NavigationContainer>
     

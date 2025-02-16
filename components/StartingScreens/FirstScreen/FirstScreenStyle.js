@@ -8,6 +8,7 @@ const styles = StyleSheet.create({
     searchContainer: {
       position: 'absolute',
       top: 40,
+      marginTop:80,
       zIndex: 1,
       width: '100%',
       paddingHorizontal: 20,
@@ -45,6 +46,20 @@ const styles = StyleSheet.create({
       width: Dimensions.get('window').width,
       height: Dimensions.get('window').height,
     },
+    menuButton: {
+    position: 'absolute',
+    top: 40,
+    left: 20,
+    zIndex: 998,
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
     bottomSheet: {
       position: 'absolute',
       bottom: 0,

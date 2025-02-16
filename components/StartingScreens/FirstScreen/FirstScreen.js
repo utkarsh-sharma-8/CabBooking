@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import {Text, View, TextInput,  PermissionsAndroid, Platform, TouchableOpacity} from 'react-native';
+import React, { useEffect, useState,useRef } from 'react';
+import {Text, View, TextInput,  PermissionsAndroid, Platform, TouchableOpacity, Animated,Dimensions} from 'react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { requestRide, listenForRideAcceptance, disconnectSocket } from "../../../utils/socket";
 
@@ -8,7 +8,12 @@ import Geolocation from '@react-native-community/geolocation';
 import styles from './FirstScreenStyle';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import fetchInitialData from './FirstScreenApi';
+import CustomSidebar from './CustomSidebar';
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
 export default function FirstScreen() {
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
   const [rideStatus,setRideStatus]=useState('');
@@ -20,25 +25,34 @@ export default function FirstScreen() {
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
-  useEffect(() => {
-    listenForRideAcceptance((data) => {
-      console.log("🚖 Ride Accepted:", data);
-      setRideStatus(`Ride Confirmed with Driver ID: ${data.driverId}`);
-    });
+  const toggleSidebar = () => {
+    const toValue = isSidebarOpen ? -DRAWER_WIDTH : 0;
+    Animated.timing(slideAnim, {
+      toValue,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    setSidebarOpen(!isSidebarOpen);
+  };
+  // useEffect(() => {
+  //   listenForRideAcceptance((data) => {
+  //     console.log("🚖 Ride Accepted:", data);
+  //     setRideStatus(`Ride Confirmed with Driver ID: ${data.driverId}`);
+  //   });
   
-    return () => {
-      disconnectSocket(); // Cleanup on unmount
-    };
-  }, []);
-  useEffect(() => {
-    // Create an interval to call the function every 10 seconds
-    const interval = setInterval(() => {
-      requestLocationPermission();
-    }, 10000); // 10000 milliseconds = 10 seconds
+  //   return () => {
+  //     disconnectSocket(); // Cleanup on unmount
+  //   };
+  // }, []);
+  // useEffect(() => {
+  //   // Create an interval to call the function every 10 seconds
+  //   const interval = setInterval(() => {
+  //     requestLocationPermission();
+  //   }, 10000); // 10000 milliseconds = 10 seconds
   
-    // Cleanup function to clear the interval when the component is unmounted
-    return () => clearInterval(interval);
-  }, []);
+  //   // Cleanup function to clear the interval when the component is unmounted
+  //   return () => clearInterval(interval);
+  // }, []);
   async function requestLocationPermission() {
     if (Platform.OS === 'android') {
       try {
@@ -92,52 +106,62 @@ export default function FirstScreen() {
       }
     }
   }
-  // const handleRequestRide = async() => {
-  //   const passengerData = {
-  //     passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
-  //     source: await getCoordinatesFromAddress(source), // User's live location
-  //     destination: await getCoordinatesFromAddress(destinationCoords), // Entered destination coordinates
-  //   };
-  //   console.log(`passenger data is ${passengerData}`)
-  
-  //   setRideStatus("🔍 Searching for a driver...");
-  
-  //   requestRide(passengerData, (data) => {
-  //     setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
-  //   });
-  // };
   const handleRequestRide = async () => {
-    if (!source.trim() || !destinationCoords) {
-      setRideStatus("❌ Please enter valid locations!");
-      return;
-    }
-  
-    setRideStatus("🔍 Searching for a driver...");
-  
-    // Wait for source and destination coordinates
-    const sourceCoords = await getCoordinatesFromAddress(source);
-    const destCoords = destinationCoords; // Already set from long press
-  
-    if (!sourceCoords || !destCoords) {
-      setRideStatus("❌ Unable to find locations. Try again.");
-      return;
-    }
-  
-    const passengerData = {
-      passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
-      source: sourceCoords, // User's pickup location
-      destination: destCoords, // Destination from long press
-    };
-  
-    console.log("Sending Request:", passengerData);
-  
-    requestRide(passengerData, (data) => {
-      if (data && data.driverId) {
-        setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
-      } else {
-        setRideStatus("❌ No drivers available. Try again later.");
+    try {
+      if (!source.trim() || !destinationCoords) {
+        setRideStatus("❌ Please enter valid pickup and destination locations!");
+        return;
       }
-    });
+  
+      setRideStatus("🔍 Searching for a driver...");
+  
+      // Get current location for source if no specific pickup location is entered
+      let sourceCoords;
+      if (source.trim() === "") {
+        sourceCoords = {
+          latitude: location.latitude,
+          longitude: location.longitude
+        };
+      } else {
+        sourceCoords = await getCoordinatesFromAddress(source);
+      }
+  
+      // Validate coordinates
+      if (!sourceCoords || !sourceCoords.latitude || !sourceCoords.longitude) {
+        setRideStatus("❌ Unable to find pickup location. Please try again.");
+        return;
+      }
+  
+      if (!destinationCoords || !destinationCoords.latitude || !destinationCoords.longitude) {
+        setRideStatus("❌ Please set a valid destination by long-pressing on the map.");
+        return;
+      }
+  
+      const passengerData = {
+        passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
+        source: {
+          latitude: parseFloat(sourceCoords.latitude),
+          longitude: parseFloat(sourceCoords.longitude)
+        },
+        destination: {
+          latitude: parseFloat(destinationCoords.latitude),
+          longitude: parseFloat(destinationCoords.longitude)
+        }
+      };
+  
+      console.log("Sending ride request with coordinates:", JSON.stringify(passengerData, null, 2));
+  
+      requestRide(passengerData, (data) => {
+        if (data && data.driverId) {
+          setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
+        } else {
+          setRideStatus("❌ No drivers available. Try again later.");
+        }
+      });
+    } catch (error) {
+      console.error("Ride request error:", error);
+      setRideStatus("❌ Error requesting ride. Please try again.");
+    }
   };
   
   
@@ -153,27 +177,45 @@ export default function FirstScreen() {
       return "Unknown Location";
     }
   };
-  const getCoordinatesFromAddress = async (address) => {
-    try {
-        const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
-        );
-        const data = await response.json();
 
-        if (data.length > 0) {
-            return {
-                latitude: parseFloat(data[0].lat),
-                longitude: parseFloat(data[0].lon),
-            };
-        } else {
-            throw new Error("Address not found");
-        }
-    } catch (error) {
-        console.error("Geocoding Error:", error);
-        return null; // Handle case where no coordinates are found
-    }
+const getCoordinatesFromAddress = async (address) => {
+  try {
+      if (!address || address.trim() === "") {
+          return null;
+      }
+
+      const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`
+      );
+
+      if (!response.ok) {
+          throw new Error(`Geocoding failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+
+          if (isNaN(lat) || isNaN(lon)) {
+              console.error("Invalid coordinates received from geocoding");
+              return null;
+          }
+
+          return {
+              latitude: lat,
+              longitude: lon
+          };
+      }
+      
+      console.error("No results found for address:", address);
+      return null;
+  } catch (error) {
+      console.error("Geocoding Error:", error);
+      return null;
+  }
 };
-
   
   const handleLongPress = async(event) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
@@ -193,6 +235,12 @@ export default function FirstScreen() {
   };    
   return (
     <View style={styles.container}>
+    <TouchableOpacity
+        style={styles.menuButton}
+        onPress={toggleSidebar}
+      >
+        <Icon name="menu" size={24} color="#333" />
+      </TouchableOpacity>
       {/* Search Container */}
       <View style={styles.searchContainer}>
         <View style={styles.inputCard}>
@@ -258,6 +306,11 @@ export default function FirstScreen() {
 >
   <Text style={styles.bottomSheetText}>Search</Text>
 </TouchableOpacity>
+<CustomSidebar
+        isOpen={isSidebarOpen}
+        slideAnim={slideAnim}
+        onClose={toggleSidebar}
+      />
     </View>
   );
 }
