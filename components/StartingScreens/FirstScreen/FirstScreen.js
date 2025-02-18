@@ -2,6 +2,7 @@ import React, { useEffect, useState,useRef } from 'react';
 import {Text, View, TextInput,  PermissionsAndroid, Platform, TouchableOpacity, Animated,Dimensions} from 'react-native';
 import MapView, { Marker, UrlTile } from 'react-native-maps';
 import { requestRide, listenForRideAcceptance, disconnectSocket } from "../../../utils/socket";
+import io from 'socket.io-client';
 
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Geolocation from '@react-native-community/geolocation';
@@ -18,6 +19,7 @@ export default function FirstScreen() {
   const [destination, setDestination] = useState('');
   const [rideStatus,setRideStatus]=useState('');
   const [drivers,setDrivers]=useState([]);
+  const [socket,setSocket]=useState();
   const [destinationCoords, setDestinationCoords] = useState(null); // Stor
   const [location, setLocation] = useState({
     latitude: 28.6139, // Default to New Delhi
@@ -44,15 +46,30 @@ export default function FirstScreen() {
   //     disconnectSocket(); // Cleanup on unmount
   //   };
   // }, []);
-  // useEffect(() => {
-  //   // Create an interval to call the function every 10 seconds
-  //   const interval = setInterval(() => {
-  //     requestLocationPermission();
-  //   }, 10000); // 10000 milliseconds = 10 seconds
+  useEffect(() => {
+    // Create an interval to call the function every 10 seconds
+    const interval = setInterval(() => {
+      requestLocationPermission();
+    }, 100000); // 10000 milliseconds = 10 seconds
   
-  //   // Cleanup function to clear the interval when the component is unmounted
-  //   return () => clearInterval(interval);
-  // }, []);
+    // Cleanup function to clear the interval when the component is unmounted
+    return () => clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    const newSocket = io(`http://192.168.1.11:3000`);
+    setSocket(newSocket);
+
+    newSocket.on("connect", () => {
+        console.log("✅ Socket connected!");
+        const passengerId = "721ca9cb-a830-43f8-a484-0ac1eff768e0"; // Use actual ID
+        newSocket.emit("register_passenger", { passengerId });
+    });
+
+    return () => {
+        newSocket.disconnect();
+    };
+}, []);
+
   async function requestLocationPermission() {
     if (Platform.OS === 'android') {
       try {
@@ -106,64 +123,129 @@ export default function FirstScreen() {
       }
     }
   }
+  // const handleRequestRide = async () => {
+  //   console.log(`Search bar pressed.....`)
+  //   try {
+  //     if (!source.trim() || !destinationCoords) {
+  //       setRideStatus("❌ Please enter valid pickup and destination locations!");
+  //       return;
+  //     }
+  
+  //     setRideStatus("🔍 Searching for a driver...");
+  
+  //     // Get current location for source if no specific pickup location is entered
+  //     let sourceCoords;
+  //     if (source.trim() === "") {
+  //       sourceCoords = {
+  //         latitude: location.latitude,
+  //         longitude: location.longitude
+  //       };
+  //     } else {
+  //       sourceCoords = await getCoordinatesFromAddress(source);
+  //     }
+  
+  //     // Validate coordinates
+  //     if (!sourceCoords || !sourceCoords.latitude || !sourceCoords.longitude) {
+  //       setRideStatus("❌ Unable to find pickup location. Please try again.");
+  //       return;
+  //     }
+  
+  //     if (!destinationCoords || !destinationCoords.latitude || !destinationCoords.longitude) {
+  //       setRideStatus("❌ Please set a valid destination by long-pressing on the map.");
+  //       return;
+  //     }
+  
+  //     const passengerData = {
+  //       passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
+  //       source: {
+  //         latitude: parseFloat(sourceCoords.latitude),
+  //         longitude: parseFloat(sourceCoords.longitude)
+  //       },
+  //       destination: {
+  //         latitude: parseFloat(destinationCoords.latitude),
+  //         longitude: parseFloat(destinationCoords.longitude)
+  //       }
+  //     };
+  
+  //     console.log("Sending ride request with coordinates:", JSON.stringify(passengerData, null, 2));
+  
+  //     requestRide(passengerData, (data) => {
+  //       if (data && data.driverId) {
+  //         setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
+  //       } else {
+  //         setRideStatus("❌ No drivers available. Try again later.");
+  //       }
+  //       console.log(`RideStatus is ${rideStatus}`)
+  //     });
+  //   } catch (error) {
+  //     console.error("Ride request error:", error);
+  //     setRideStatus("❌ Error requesting ride. Please try again.");
+  //   }
+  // };
   const handleRequestRide = async () => {
+    console.log(`🔍 Search bar pressed...`);
+
     try {
-      if (!source.trim() || !destinationCoords) {
-        setRideStatus("❌ Please enter valid pickup and destination locations!");
-        return;
-      }
-  
-      setRideStatus("🔍 Searching for a driver...");
-  
-      // Get current location for source if no specific pickup location is entered
-      let sourceCoords;
-      if (source.trim() === "") {
-        sourceCoords = {
-          latitude: location.latitude,
-          longitude: location.longitude
-        };
-      } else {
-        sourceCoords = await getCoordinatesFromAddress(source);
-      }
-  
-      // Validate coordinates
-      if (!sourceCoords || !sourceCoords.latitude || !sourceCoords.longitude) {
-        setRideStatus("❌ Unable to find pickup location. Please try again.");
-        return;
-      }
-  
-      if (!destinationCoords || !destinationCoords.latitude || !destinationCoords.longitude) {
-        setRideStatus("❌ Please set a valid destination by long-pressing on the map.");
-        return;
-      }
-  
-      const passengerData = {
-        passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
-        source: {
-          latitude: parseFloat(sourceCoords.latitude),
-          longitude: parseFloat(sourceCoords.longitude)
-        },
-        destination: {
-          latitude: parseFloat(destinationCoords.latitude),
-          longitude: parseFloat(destinationCoords.longitude)
+        if (!source || source.trim() === "" || !destinationCoords) {
+            setRideStatus("❌ Please enter valid pickup and destination locations!");
+            return;
         }
-      };
-  
-      console.log("Sending ride request with coordinates:", JSON.stringify(passengerData, null, 2));
-  
-      requestRide(passengerData, (data) => {
-        if (data && data.driverId) {
-          setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
+
+        setRideStatus("🔍 Searching for a driver...");
+
+        // Get current location for source if no specific pickup location is entered
+        let sourceCoords;
+        if (!source.trim()) {
+            sourceCoords = {
+                latitude: location.latitude,
+                longitude: location.longitude
+            };
         } else {
-          setRideStatus("❌ No drivers available. Try again later.");
+            sourceCoords = await getCoordinatesFromAddress(source);
         }
-      });
+
+        // Validate source and destination coordinates
+        if (!sourceCoords || !sourceCoords.latitude || !sourceCoords.longitude) {
+            setRideStatus("❌ Unable to find pickup location. Please try again.");
+            return;
+        }
+
+        if (!destinationCoords || !destinationCoords.latitude || !destinationCoords.longitude) {
+            setRideStatus("❌ Please set a valid destination by long-pressing on the map.");
+            return;
+        }
+
+        // Construct passenger ride request data
+        const passengerData = {
+            passengerId: "721ca9cb-a830-43f8-a484-0ac1eff768e0",
+            source: {
+                latitude: parseFloat(sourceCoords.latitude),
+                longitude: parseFloat(sourceCoords.longitude)
+            },
+            destination: {
+                latitude: parseFloat(destinationCoords.latitude),
+                longitude: parseFloat(destinationCoords.longitude)
+            }
+        };
+
+        console.log("📡 Sending ride request:", JSON.stringify(passengerData, null, 2));
+
+        // Send ride request via socket
+        requestRide(passengerData, (data) => {
+            if (data && data.driverId) {
+                console.log(`✅ Ride assigned to driver ${data.driverId}`);
+                setRideStatus(`🚖 Ride Assigned! Driver ID: ${data.driverId}`);
+            } else {
+                console.log("❌ No drivers available.");
+                setRideStatus("❌ No drivers available. Try again later.");
+            }
+        });
     } catch (error) {
-      console.error("Ride request error:", error);
-      setRideStatus("❌ Error requesting ride. Please try again.");
+        console.error("❌ Ride request error:", error);
+        setRideStatus("❌ Error requesting ride. Please try again.");
     }
-  };
-  
+};
+
   
   const getAddressFromCoordinates = async (latitude, longitude) => {
     try {

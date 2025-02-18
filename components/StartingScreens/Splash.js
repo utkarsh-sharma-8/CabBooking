@@ -7,8 +7,10 @@ const navigation = useNavigation();
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      // navigation.replace("Auth");  // Corrected navigation method
-      navigation.replace("FirstScreen");  // Corrected navigation method
+      navigation.replace("Auth");  // Corrected navigation method
+      // navigation.replace("FirstScreen");  // Corrected navigation method
+      // navigation.replace("DriverScreen");  // Corrected navigation method
+
 
      
     }, 2000);  // Splash screen duration

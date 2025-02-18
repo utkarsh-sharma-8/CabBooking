@@ -51,7 +51,7 @@ const CustomSidebar = ({ isOpen, slideAnim, onClose }) => {
           <View style={styles.menuContainer}>
             <MenuItem icon="history" text="Ride History" type='1' />
             <MenuItem icon="payment" text="Payment Methods"type='1' />
-            <MenuItem icon="car" text="Become a Driver" onPress={()=>navigation.navigate("Verification")}type='0' />
+            <MenuItem icon="car" text="Become a Driver" onPress={()=>navigation.replace("Verification")}type='0' />
             <MenuItem icon="local-offer" text="Promotions"type='1' />
             <MenuItem icon="settings" text="Settings"type='1' />
             <MenuItem icon="help" text="Help & Support"type='1' />
