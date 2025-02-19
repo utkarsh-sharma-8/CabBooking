@@ -14,6 +14,7 @@ import styles from './AuthStyles';
 import { useNavigation } from '@react-navigation/native';
 
 import AuthApi from './AuthScreenApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function Auth() {
 
@@ -60,6 +61,10 @@ export default function Auth() {
       try{
         const response=await AuthApi(data);
       if(response.message==="Success"){
+        await AsyncStorage.setItem("name",response.result.name);
+        await AsyncStorage.setItem("passengerId",response.result.passengerId);
+        await AsyncStorage.setItem("phone",response.result.phone);
+        await AsyncStorage.setItem("token",response.token);
         navigation.navigate("FirstScreen")
         console.log("login Successful")
         
