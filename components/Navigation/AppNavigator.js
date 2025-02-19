@@ -6,10 +6,11 @@ import Splash from '../StartingScreens/Splash';
 import FirstScreen from '../StartingScreens/FirstScreen/FirstScreen';
 import DriverVerification from '../DiverScreens/VerificationScreen/Verification';
 import DriverScreen from '../DiverScreens/DriverMainScreen/DriverScreen';
-
+import { LocationProvider } from '../../utils/locationContext';
 const Stack=createNativeStackNavigator();
 const AppNavigator = () => {
   return (
+    <LocationProvider>
     <NavigationContainer>
         <Stack.Navigator>
             <Stack.Screen name="Splash" component={Splash} options={{headerShown:false}}/>
@@ -19,7 +20,7 @@ const AppNavigator = () => {
             <Stack.Screen name='DriverScreen' component ={DriverScreen} options={{headerShown:false}}/>
         </Stack.Navigator>
     </NavigationContainer>
-    
+    </LocationProvider>
   )
 }
 

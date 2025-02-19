@@ -1,45 +1,36 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View, Image, ActivityIndicator, Dimensions } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import React, {useEffect} from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  ActivityIndicator,
+  Dimensions,
+} from 'react-native';
+import {useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from './splashStyle';
-import { getCurrentLocation } from '../../utils/permission';  // Import the utility
+import {getCurrentLocation} from '../../utils/permission'; // Import the utility
 export default function Splash() {
-const navigation = useNavigation();
-
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     requestLocationPermission();
-  //     navigation.replace("Auth");  // Corrected navigation method
-  //     // navigation.replace("FirstScreen");  // Corrected navigation method
-  //     // navigation.replace("DriverScreen");  // Corrected navigation method
-
-
-     
-  //   }, 2000);  // Splash screen duration
-
-  //   return () => clearTimeout(timer);  // Cleanup timer
-  // }, []);
+  const navigation = useNavigation();
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Fetch the user's location before navigating
-      getCurrentLocation(
-        async (location) => {
-          console.log("User location:", location);
-          // Save the location to AsyncStorage if needed
-          await AsyncStorage.setItem('latitude', location.latitude.toString());
-          await AsyncStorage.setItem('longitude', location.longitude.toString());
-
-          navigation.replace("Auth");  // Navigate after fetching location
-        },
-        (error) => {
-          console.error("Failed to fetch location", error);
-          navigation.replace("Auth");  // Navigate even if location fails
+    const checkAuth = async () => {
+      try {
+        const token = await AsyncStorage.getItem('token');
+        const isDriver = await AsyncStorage.getItem('isDriver');
+        if (isDriver) {
+          navigation.replace('DriverScreen');
+        } else if (token) {
+          navigation.replace('FirstScreen');
+        } else {
+          navigation.replace('Auth');
         }
-      );
-    }, 3000);  // Splash duration
-
-    return () => clearTimeout(timer);  // Cleanup the timer
+      } catch (error) {
+        console.log(`error at splash is ${error}`);
+      }
+    };
+    const timer = setTimeout(checkAuth, 3000); // Splash duration
+    return () => clearTimeout(timer);
   }, []);
   return (
     <View style={styles.container}>
