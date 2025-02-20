@@ -1,4 +1,10 @@
-import React, {useEffect, useState, useRef, useContext,useCallback} from 'react';
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useContext,
+  useCallback,
+} from 'react';
 import {
   Text,
   View,
@@ -15,6 +21,7 @@ import {
   listenForRideAcceptance,
   disconnectSocket,
   registerPassenger,
+  listenForDriverLocation,
 } from '../../../utils/socket';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import styles from './FirstScreenStyle';
@@ -47,19 +54,11 @@ export default FirstScreen = () => {
     }).start();
     setSidebarOpen(!isSidebarOpen);
   };
-  const fetchData = useCallback(async () => {
-    await fetchInitialData();
-  }, []);  // ✅ Define useCallback OUTSIDE useEffect
   useEffect(() => {
-  //   const fetchData = useCallback(async () => {
-  //     await fetchInitialData();  // ✅ Wrapped in useCallback
-  // }, []);
-
-      // fetchInitialData();
-
     // Register the passenger when entering this screen
     const fetchPassengerIdandListenForRide = async () => {
       const id = await AsyncStorage.getItem('passengerId');
+      console.log(`passengerId is ${id}`);
       if (id) {
         setPassengerId(id);
         registerPassenger(id);
@@ -71,13 +70,38 @@ export default FirstScreen = () => {
         console.log('🚖 Ride Accepted:', data);
         setRideData(data);
       });
+      listenForDriverLocation(driverData => {
+        console.log(`📍 Driver Location Updated:`, driverData);
+
+        setDrivers(prevDrivers => {
+          if (!Array.isArray(driverData)) {
+            driverData = [driverData]; // ✅ Ensure it's always an array
+          }
+
+          const updatedDrivers = [...prevDrivers];
+
+          driverData.forEach(newDriver => {
+            const existingDriverIndex = updatedDrivers.findIndex(
+              driver => driver.phone === newDriver.phone,
+            );
+
+            if (existingDriverIndex !== -1) {
+              // ✅ Update existing driver location
+              updatedDrivers[existingDriverIndex] = newDriver;
+            } else {
+              // ✅ Add new driver to list
+              updatedDrivers.push(newDriver);
+            }
+          });
+
+          return updatedDrivers;
+        });
+      });
     };
     fetchPassengerIdandListenForRide();
-    fetchData();
     return () => {
       socket.off('rideAccepted'); // Cleanup to prevent duplicate listeners
     };
-    
   }, []);
   const handleRequestRide = async () => {
     console.log(`🔍 Search bar pressed...`);
@@ -133,11 +157,6 @@ export default FirstScreen = () => {
         },
       };
 
-      console.log(
-        'Sending ride request:',
-        JSON.stringify(passengerData, null, 2),
-      );
-
       // Send ride request via socket
       requestRide(passengerData, data => {
         if (data && data.driverId) {
@@ -149,8 +168,8 @@ export default FirstScreen = () => {
         }
       });
     } catch (error) {
-      console.error('❌ Ride request error:', error);
-      setRideStatus('❌ Error requesting ride. Please try again.');
+      console.error('Ride request error:', error);
+      setRideStatus('Error requesting ride. Please try again.');
     }
   };
   const handleLongPress = async event => {
@@ -230,13 +249,12 @@ export default FirstScreen = () => {
         )}
         {drivers.map(driver => (
           <Marker
-            key={driver.id}
+            key={driver.phone}
             coordinate={{
               latitude: driver.latitude,
               longitude: driver.longitude,
             }}
-            title={`Car: ${driver.car_no}`}
-            description={`Driver: ${driver.name}`}>
+            title={`phone.: ${driver.phone}`}>
             <Icon name="directions-car" size={30} color="black" />
           </Marker>
         ))}

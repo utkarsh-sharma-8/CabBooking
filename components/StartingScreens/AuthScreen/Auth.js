@@ -71,6 +71,7 @@ export default function Auth() {
         const data = {name, phone};
         const response = await AuthApi(data);
         if (response.message === 'Success') {
+          
           await AsyncStorage.setItem('name', response.result.name);
           await AsyncStorage.setItem(
             'passengerId',
@@ -79,6 +80,8 @@ export default function Auth() {
           await AsyncStorage.setItem('phone', response.result.phone);
           await AsyncStorage.setItem('token', response.token);
           navigation.navigate('FirstScreen');
+          setName('');
+          setPhone('');
         }
       } catch (error) {
         console.log(error);
@@ -87,45 +90,6 @@ export default function Auth() {
       }
     }
   };
-
-  let InputField = ({
-    label,
-    value,
-    onChange,
-    placeholder,
-    keyboardType,
-    maxLength,
-    error,
-    autoCapitalize,
-  }) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        style={[
-          {
-            height: 56,
-            fontSize: 16,
-            color: '#1A1A1A',
-            borderWidth: 1.5,
-            borderColor: error ? '#FF3B30' : '#E0E0E0',
-            borderRadius: 12,
-            backgroundColor: '#F8F8F8',
-            paddingHorizontal: 16,
-          },
-          error && styles.inputWrapperError,
-        ]}
-        placeholder={placeholder}
-        value={value}
-        onChangeText={onChange}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        autoCapitalize={autoCapitalize}
-        placeholderTextColor="#A0A0A0"
-      />
-      {error && <Text style={styles.errorText}>{error}</Text>}
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#fff" />

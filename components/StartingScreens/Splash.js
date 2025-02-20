@@ -10,7 +10,6 @@ import {
 import {useNavigation} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from './splashStyle';
-import {getCurrentLocation} from '../../utils/permission'; // Import the utility
 export default function Splash() {
   const navigation = useNavigation();
   useEffect(() => {

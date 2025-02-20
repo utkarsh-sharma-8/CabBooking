@@ -13,60 +13,76 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import VerificationApi from './VerificationApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { styles } from './VerificationStyle';
 
 const DriverVerification = () => {
-    const [name,setName]=useState('');
-    const [carNo,setCarNo]=useState('');
-    const [phoneNo,setPhoneNo]=useState('');
+  const [name, setName] = useState('');
+  const [carNo, setCarNo] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-const navigation = useNavigation();
+  const navigation = useNavigation();
 
   const handleSubmit = async () => {
-    navigation.navigate('DriverScreen');
-
-    if (!carNo || !phoneNo || !name) {
+    if (!carNo || !phone || !name) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     setLoading(true);
-    const data={
-        name:name,
-        car_no:carNo,
-        phone:phoneNo,
-    }
-    try {
-        const response=await VerificationApi(data);
-        console.log(`Response from verification api is ${JSON.stringify(response,null,2)}`);
-      Alert.alert('Success', 'Driver added successfully!');
-    //   setName('');
-    //   setPhoneNo('');
-    //   setCarNo('');
+    const data = {
+      name: name,
+      car_no: carNo,
+      phone: phone,
+    };
 
+    try {
+      const response = await VerificationApi(data);
+      if (!response) {
+        Alert.alert("Cannot Register");
+      } else {
+        await AsyncStorage.removeItem("passengerId");
+        await AsyncStorage.removeItem("phone");
+        await AsyncStorage.removeItem("name");
+        await AsyncStorage.setItem("isDriver", "true");
+        await AsyncStorage.setItem("carNo", carNo);
+        await AsyncStorage.setItem("phone", phone);
+        await AsyncStorage.setItem("name", name);
+        Alert.alert('Success', 'Driver added successfully!');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "DriverScreen" }],
+        });
+      }
+      
+      setName('');
+      setPhone('');
+      setCarNo('');
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.log(`error is ${error}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.card}>
           <Text style={styles.title}>Driver Verification</Text>
+          <Text style={styles.subtitle}>Please enter your details below</Text>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Car Number</Text>
             <TextInput
-              style={styles.input}
+              style={styles.carInput}
               value={carNo}
               onChangeText={setCarNo}
-              placeholder="Enter car number"
-              placeholderTextColor="#666"
+              placeholder="Enter car number (e.g., ABC-123)"
+              placeholderTextColor="#999"
               autoCapitalize="characters"
             />
           </View>
@@ -74,35 +90,40 @@ const navigation = useNavigation();
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Phone Number</Text>
             <TextInput
-              style={styles.input}
-              value={phoneNo}
-              onChangeText={setPhoneNo}
-              placeholder="Enter phone number"
-              placeholderTextColor="#666"
+              style={styles.phoneInput}
+              value={phone}
+              onChangeText={setPhone}
               keyboardType="phone-pad"
+              maxLength={10}
+              placeholder="Enter phone number"
+              placeholderTextColor="#999"
             />
           </View>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Full Name</Text>
             <TextInput
-              style={styles.input}
+              style={styles.nameInput}
               value={name}
               onChangeText={setName}
-              placeholder="Enter full name"
-              placeholderTextColor="#666"
+              placeholder="Enter your full name"
+              placeholderTextColor="#999"
+              autoCapitalize="words"
             />
           </View>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.buttonText}>Add Driver</Text>
+              <>
+                <Text style={styles.buttonText}>Verify & Continue</Text>
+                <Text style={styles.buttonSubtext}>Tap to complete registration</Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -111,65 +132,6 @@ const navigation = useNavigation();
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-    color: '#333',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#333',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: '#999',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+
 
 export default DriverVerification;
