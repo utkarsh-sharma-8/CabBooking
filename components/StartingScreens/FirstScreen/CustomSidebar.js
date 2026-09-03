@@ -11,6 +11,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Icon2 from 'react-native-vector-icons/AntDesign';
 import { useNavigation } from '@react-navigation/native';
+import apiClient from '../../../utils/apiClient';
+import { getRefreshToken } from '../../../utils/authStorage';
+import { endSession } from '../../../utils/session';
 
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -18,6 +21,19 @@ const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
 
 const CustomSidebar = ({ isOpen, slideAnim, onClose }) => {
     const navigation = useNavigation();
+
+    const handleLogout = async () => {
+      try {
+        const refreshToken = await getRefreshToken();
+        if (refreshToken) {
+          await apiClient.post('/auth/logout', {refreshToken});
+        }
+      } catch (error) {
+        console.log(`Logout request failed (continuing local logout): ${error}`);
+      } finally {
+        await endSession();
+      }
+    };
   return (
     <>
       {/* Overlay */}
@@ -58,7 +74,7 @@ const CustomSidebar = ({ isOpen, slideAnim, onClose }) => {
           </View>
 
           {/* Logout Button */}
-          <TouchableOpacity style={styles.logoutButton}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </ScrollView>

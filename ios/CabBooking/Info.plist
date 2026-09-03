@@ -31,6 +31,19 @@
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- Local dev backend LAN IP — must match utils/config.js's HOST.
+			     NSAllowsLocalNetworking above only covers localhost/.local, not
+			     an arbitrary LAN IP, so this exception is needed for iOS to
+			     reach a plain-HTTP dev backend during development. Update this
+			     alongside config.js's HOST if your machine's IP changes. -->
+			<key>192.168.31.183</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string></string>

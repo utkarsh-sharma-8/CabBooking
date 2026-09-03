@@ -1,24 +1,27 @@
-import { StyleSheet, Text, View, Alert, Dimensions, PermissionsAndroid } from 'react-native';
+import { StyleSheet, Text, View, Dimensions, PermissionsAndroid, TouchableOpacity } from 'react-native';
 import React, { useEffect, useState, useRef,useContext } from 'react';
-import MapView, { Marker, UrlTile } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Button, Modal } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { LocationContext } from '../../../utils/locationContext'; //Use Location Context
-import { listenForRideRequests, registerDriver, updateDriverLocation,socket } from '../../../utils/socket';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { listenForRideRequests, registerDriver, updateDriverLocation, acceptRide, getSocket } from '../../../utils/socket';
+import { getUser } from '../../../utils/authStorage';
+import { endSession } from '../../../utils/session';
 
 export default function DriverScreen() {
+  const navigation = useNavigation();
   const {location} = useContext(LocationContext);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [currentRequest, setCurrentRequest] = useState(null);
   const [phone, setPhone] = useState('');
   useEffect(() => {
     const loadPhoneAndRegister = async () => {
-      const storedPhone = await AsyncStorage.getItem("phone");
-      if (storedPhone) {
-        setPhone(storedPhone); //This will update state
-        registerDriver({ phone: storedPhone, latitude: location.latitude, longitude: location.longitude });
+      const user = await getUser();
+      if (user?.phone) {
+        setPhone(user.phone); //This will update state
+        registerDriver({ phone: user.phone, latitude: location.latitude, longitude: location.longitude });
       }else{
-        console.log(`lol`);
+        console.log(`No stored user found — driver is not registered`);
       }
     };
     loadPhoneAndRegister();
@@ -40,15 +43,42 @@ export default function DriverScreen() {
     });
 
     return () => {
-      socket.off("rideRequest"); //Cleanup listener on unmount
+      getSocket()?.off("rideRequest"); //Cleanup listener on unmount
     };
-  }, []); // Runs when `phone` is set
-  
-  
+  }, [phone]); // Must re-run once `phone` actually resolves (it starts empty)
+
+  const handleAcceptRide = () => {
+    if (!currentRequest) return;
+    acceptRide(
+      phone,
+      currentRequest.passengerId,
+      currentRequest.pickupLocation,
+      currentRequest.destinationLocation,
+      data => {
+        navigation.navigate('TripScreen', {
+          tripId: data?.tripId,
+          driver: null,
+          passenger: data?.passenger || null,
+          pickupLocation: currentRequest.pickupLocation,
+          destinationLocation: currentRequest.destinationLocation,
+        });
+      },
+    );
+    setShowRequestModal(false);
+  };
+
+  const handleLogout = async () => {
+    await endSession();
+  };
+
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.logoutButtonText}>Logout</Text>
+      </TouchableOpacity>
       {location && (
         <MapView
+          provider={PROVIDER_GOOGLE}
           style={styles.map}
           initialRegion={{
             latitude: location.latitude,
@@ -57,7 +87,6 @@ export default function DriverScreen() {
             longitudeDelta: 0.0421,
           }}
         >
-        <UrlTile urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maximumZ={19} />
           <Marker
             coordinate={{
               latitude: location.latitude,
@@ -77,7 +106,7 @@ export default function DriverScreen() {
               <>
                 <Text style={styles.modalText}>Source:{(`${currentRequest.pickupLocation.latitude},${currentRequest.pickupLocation.longitude}`)}</Text>
                 <Text style={styles.modalText}>Destination:{(`${currentRequest.destinationLocation.latitude},${currentRequest.destinationLocation.longitude}`)}</Text>
-                
+
                 <Text style={styles.modalText}>
                   Distance: {currentRequest.distance} km
                 </Text>
@@ -85,7 +114,7 @@ export default function DriverScreen() {
                   Estimated fare: ${currentRequest.estimatedFare}
                 </Text>
                 <View style={styles.buttonContainer}>
-                  <Button title="Accept" />
+                  <Button title="Accept" onPress={handleAcceptRide} />
                   <Button title="Decline" onPress={() => setShowRequestModal(false)} color="red" />
                 </View>
               </>
@@ -100,6 +129,20 @@ export default function DriverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  logoutButton: {
+    position: 'absolute',
+    top: 48,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  logoutButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   map: {
     width: Dimensions.get('window').width,
@@ -139,4 +182,3 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
 });
-

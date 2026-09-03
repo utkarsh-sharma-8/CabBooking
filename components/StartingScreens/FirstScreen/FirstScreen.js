@@ -13,19 +13,20 @@ import {
   Animated,
   Dimensions,
   Alert,
+  Keyboard,
 } from 'react-native';
-import MapView, {Marker, UrlTile} from 'react-native-maps';
+import MapView, {Marker, PROVIDER_GOOGLE} from 'react-native-maps';
+import {useNavigation} from '@react-navigation/native';
 import {
-  socket,
+  getSocket,
   requestRide,
   listenForRideAcceptance,
-  disconnectSocket,
   registerPassenger,
   listenForDriverLocation,
 } from '../../../utils/socket';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import styles from './FirstScreenStyle';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import {getUser} from '../../../utils/authStorage';
 import fetchInitialData from './FirstScreenApi';
 import CustomSidebar from './CustomSidebar';
 import {LocationContext} from '../../../utils/locationContext';
@@ -35,16 +36,32 @@ import {
 } from '../../../utils/addressCoordinates';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DRAWER_WIDTH = SCREEN_WIDTH * 0.75;
-export default FirstScreen = () => {
+const FirstScreen = () => {
+  const navigation = useNavigation();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const [source, setSource] = useState('');
   const [destination, setDestination] = useState('');
   const [rideStatus, setRideStatus] = useState('');
   const [drivers, setDrivers] = useState([]);
-  const [destinationCoords, setDestinationCoords] = useState(null); // Stor
+  const [sourceCoords, setSourceCoords] = useState(null);
+  const [destinationCoords, setDestinationCoords] = useState(null);
+  // Which input a map tap should fill next — set by focusing that field.
+  const [activeField, setActiveField] = useState(null); // 'source' | 'destination' | null
   const [passengerId, setPassengerId] = useState('');
   const {location} = useContext(LocationContext); // Get location from context
+  // The rideAccepted listener below is registered once at mount (see the
+  // effect's [] deps) — refs, not the state variables directly, keep it
+  // reading the LATEST pickup/destination instead of a stale mount-time
+  // closure once the user actually sets them.
+  const sourceCoordsRef = useRef(sourceCoords);
+  const destinationCoordsRef = useRef(destinationCoords);
+  useEffect(() => {
+    sourceCoordsRef.current = sourceCoords;
+  }, [sourceCoords]);
+  useEffect(() => {
+    destinationCoordsRef.current = destinationCoords;
+  }, [destinationCoords]);
   const toggleSidebar = () => {
     const toValue = isSidebarOpen ? -DRAWER_WIDTH : 0;
     Animated.timing(slideAnim, {
@@ -57,7 +74,8 @@ export default FirstScreen = () => {
   useEffect(() => {
     // Register the passenger when entering this screen
     const fetchPassengerIdandListenForRide = async () => {
-      const id = await AsyncStorage.getItem('passengerId');
+      const user = await getUser();
+      const id = user?.passengerId;
       console.log(`passengerId is ${id}`);
       if (id) {
         setPassengerId(id);
@@ -68,7 +86,14 @@ export default FirstScreen = () => {
       // Listen for ride acceptance
       listenForRideAcceptance(data => {
         console.log('🚖 Ride Accepted:', data);
-        setRideData(data);
+        setRideStatus(data?.message || 'Your ride has been accepted!');
+        navigation.navigate('TripScreen', {
+          tripId: data?.tripId,
+          driver: data?.driver || (data?.driverId ? {phone: data.driverId} : null),
+          passenger: null,
+          pickupLocation: sourceCoordsRef.current,
+          destinationLocation: destinationCoordsRef.current,
+        });
       });
       listenForDriverLocation(driverData => {
         console.log(`📍 Driver Location Updated:`, driverData);
@@ -100,9 +125,29 @@ export default FirstScreen = () => {
     };
     fetchPassengerIdandListenForRide();
     return () => {
-      socket.off('rideAccepted'); // Cleanup to prevent duplicate listeners
+      getSocket()?.off('rideAccepted'); // Cleanup to prevent duplicate listeners
     };
   }, []);
+  // Auto-fill Pickup with the current location's address on load — but only
+  // until the user starts interacting with it (typing, focusing it, or
+  // tapping the map to set it) — after that, their choice always wins. This
+  // re-checks on every location update (cheap: it short-circuits once source
+  // is set) since the first update or two may still be locationContext's
+  // placeholder default before a real GPS fix comes in.
+  useEffect(() => {
+    if (activeField === 'source' || sourceCoords || source) return;
+    let cancelled = false;
+    (async () => {
+      const address = await getAddressFromCoordinates(location.latitude, location.longitude);
+      if (cancelled || !address) return;
+      setSource(address);
+      setSourceCoords({latitude: location.latitude, longitude: location.longitude});
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [location.latitude, location.longitude]);
+
   const handleRequestRide = async () => {
     console.log(`🔍 Search bar pressed...`);
 
@@ -115,19 +160,23 @@ export default FirstScreen = () => {
 
       setRideStatus('Searching for a driver...');
 
-      // Get current location for source if no specific pickup location is entered
-      let sourceCoords;
-      if (!source.trim()) {
-        sourceCoords = {
+      // Prefer coords picked directly off the map (precise); fall back to
+      // the device's current location if the field was left empty; only
+      // geocode as a last resort, for a pickup address the user typed by hand.
+      let resolvedSourceCoords;
+      if (sourceCoords) {
+        resolvedSourceCoords = sourceCoords;
+      } else if (!source.trim()) {
+        resolvedSourceCoords = {
           latitude: location.latitude,
           longitude: location.longitude,
         };
       } else {
-        sourceCoords = await getCoordinatesFromAddress(source);
+        resolvedSourceCoords = await getCoordinatesFromAddress(source);
       }
 
       // Validate source and destination coordinates
-      if (!sourceCoords || !sourceCoords.latitude || !sourceCoords.longitude) {
+      if (!resolvedSourceCoords || !resolvedSourceCoords.latitude || !resolvedSourceCoords.longitude) {
         setRideStatus('Unable To Find Pickup Location. Please Try Again.');
         return;
       }
@@ -138,7 +187,7 @@ export default FirstScreen = () => {
         !destinationCoords.longitude
       ) {
         setRideStatus(
-          'Please Set a Valid Destination By Long-Pressing On The Map.',
+          'Please Set a Valid Destination By Tapping The Map.',
         );
         return;
       }
@@ -148,8 +197,8 @@ export default FirstScreen = () => {
       const passengerData = {
         passengerId: passengerId,
         source: {
-          latitude: parseFloat(sourceCoords.latitude),
-          longitude: parseFloat(sourceCoords.longitude),
+          latitude: parseFloat(resolvedSourceCoords.latitude),
+          longitude: parseFloat(resolvedSourceCoords.longitude),
         },
         destination: {
           latitude: parseFloat(destinationCoords.latitude),
@@ -172,21 +221,37 @@ export default FirstScreen = () => {
       setRideStatus('Error requesting ride. Please try again.');
     }
   };
-  const handleLongPress = async event => {
+  // Fills whichever input was focused last (tap the Pickup or Destination
+  // field, then tap a spot on the map). If neither was focused, defaults to
+  // Destination — the map's original single-purpose behavior.
+  const handleMapPress = async event => {
     const {latitude, longitude} = event.nativeEvent.coordinate;
+    const field = activeField || 'destination';
 
-    // Set destination coordinates
-    setDestinationCoords({latitude, longitude});
     const address = await getAddressFromCoordinates(latitude, longitude);
-    // Format coordinates for user-friendly display
-    if (address) {
-      setDestination(address);
+    const displayText =
+      address || `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`;
+
+    if (field === 'source') {
+      setSourceCoords({latitude, longitude});
+      setSource(displayText);
     } else {
-      setDestination(
-        `Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`,
-      );
+      setDestinationCoords({latitude, longitude});
+      setDestination(displayText);
     }
-    console.log('Destination Set:', latitude, longitude);
+    setActiveField(null);
+    Keyboard.dismiss();
+    console.log(`${field} set:`, latitude, longitude);
+  };
+
+  const handleSourceChange = text => {
+    setSource(text);
+    setSourceCoords(null); // typed text no longer matches any previously-picked coords
+  };
+
+  const handleDestinationChange = text => {
+    setDestination(text);
+    setDestinationCoords(null);
   };
   return (
     <View style={styles.container}>
@@ -197,13 +262,18 @@ export default FirstScreen = () => {
       <View style={styles.searchContainer}>
         <View style={styles.inputCard}>
           {/* Source Input */}
-          <View style={styles.inputWrapper}>
+          <View
+            style={[
+              styles.inputWrapper,
+              activeField === 'source' && {borderColor: '#FFD700', borderWidth: 2},
+            ]}>
             <Icon name="my-location" size={20} color="#FFD700" />
             <TextInput
               style={styles.input}
-              placeholder="Enter pickup location"
+              placeholder="Enter pickup location, or tap here then tap the map"
               value={source}
-              onChangeText={setSource}
+              onChangeText={handleSourceChange}
+              onFocus={() => setActiveField('source')}
               placeholderTextColor="#666666"
             />
           </View>
@@ -212,13 +282,18 @@ export default FirstScreen = () => {
           <View style={styles.divider} />
 
           {/* Destination Input */}
-          <View style={styles.inputWrapper}>
+          <View
+            style={[
+              styles.inputWrapper,
+              activeField === 'destination' && {borderColor: '#FF0000', borderWidth: 2},
+            ]}>
             <Icon name="location-on" size={24} color="#FF0000" />
             <TextInput
               style={styles.input}
-              placeholder="Where to?"
+              placeholder="Where to? Or tap here then tap the map"
               value={destination}
-              onChangeText={setDestination}
+              onChangeText={handleDestinationChange}
+              onFocus={() => setActiveField('destination')}
               placeholderTextColor="#666666"
             />
           </View>
@@ -227,19 +302,21 @@ export default FirstScreen = () => {
 
       {/* Map View */}
       <MapView
+        provider={PROVIDER_GOOGLE}
         style={styles.map}
-        region={location}
+        initialRegion={location}
         showsUserLocation={true}
         followsUserLocation={false}
-        onLongPress={handleLongPress}>
-        {/* OpenStreetMap Tile Layer */}
-        <UrlTile
-          urlTemplate="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          maximumZ={19}
-        />
-
+        onPress={handleMapPress}>
         {/* Current Location Marker */}
         <Marker coordinate={location} title="Your Location" />
+        {sourceCoords && (
+          <Marker
+            coordinate={sourceCoords}
+            title="Pickup"
+            pinColor="gold"
+          />
+        )}
         {destinationCoords && (
           <Marker
             coordinate={destinationCoords}
@@ -272,3 +349,5 @@ export default FirstScreen = () => {
     </View>
   );
 };
+
+export default FirstScreen;

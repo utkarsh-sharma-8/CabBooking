@@ -13,18 +13,17 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import VerificationApi from './VerificationApi';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getUser, setUser } from '../../../utils/authStorage';
 import { styles } from './VerificationStyle';
 
 const DriverVerification = () => {
   const [name, setName] = useState('');
   const [carNo, setCarNo] = useState('');
-  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
 
   const handleSubmit = async () => {
-    if (!carNo || !phone || !name) {
+    if (!carNo || !name) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -33,32 +32,34 @@ const DriverVerification = () => {
     const data = {
       name: name,
       car_no: carNo,
-      phone: phone,
     };
 
     try {
       const response = await VerificationApi(data);
-      if (!response) {
-        Alert.alert("Cannot Register");
+      if (!response?.success) {
+        Alert.alert('Error', response?.message || 'Cannot register as driver');
       } else {
-        await AsyncStorage.removeItem("passengerId");
-        await AsyncStorage.removeItem("phone");
-        await AsyncStorage.removeItem("name");
-        await AsyncStorage.setItem("isDriver", "true");
-        await AsyncStorage.setItem("carNo", carNo);
-        await AsyncStorage.setItem("phone", phone);
-        await AsyncStorage.setItem("name", name);
-        Alert.alert('Success', 'Driver added successfully!');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "DriverScreen" }],
-        });
+        const currentUser = await getUser();
+        // currentUser should always exist here (set at OTP verification), but
+        // guard anyway rather than silently persisting a user object missing
+        // phone/passengerId if it's ever somehow absent.
+        if (currentUser) {
+          await setUser({...currentUser, isDriver: true, carNo});
+          Alert.alert('Success', 'Driver added successfully!');
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "DriverScreen" }],
+          });
+        } else {
+          Alert.alert('Error', 'Your session looks incomplete — please log in again.');
+        }
       }
-      
+
       setName('');
-      setPhone('');
       setCarNo('');
     } catch (error) {
+      const message = error?.response?.data?.message || 'Could not register as driver. Please try again.';
+      Alert.alert('Error', message);
       console.log(`error is ${error}`);
     } finally {
       setLoading(false);
@@ -84,19 +85,6 @@ const DriverVerification = () => {
               placeholder="Enter car number (e.g., ABC-123)"
               placeholderTextColor="#999"
               autoCapitalize="characters"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.phoneInput}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              maxLength={10}
-              placeholder="Enter phone number"
-              placeholderTextColor="#999"
             />
           </View>
 

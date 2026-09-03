@@ -1,3 +1,37 @@
+# RideNow — Cab Booking (React Native)
+
+Passenger/driver client for the RideNow cab-booking app. Auth is phone number +
+OTP (no passwords) against the backend in `../../be/cab_booking_be` — see that
+repo's README for the API and how to run it.
+
+## Before you run this
+
+1. Start the backend first (`cd ../../be/cab_booking_be && npm run dev`).
+2. Point the app at your backend: edit `utils/config.js` and set `HOST` to
+   your machine's LAN IP (not `localhost` — the app runs on a
+   simulator/device, not your dev machine, so it needs a real reachable
+   address). This is the **only** place the backend URL is configured — it
+   used to be duplicated across three files, which is why previous versions
+   sometimes silently talked to the wrong host.
+3. `npm install`, then `npm run android` / `npm run ios` as usual.
+
+### Trying the login flow
+
+The backend's default `SMS_PROVIDER=console` logs the OTP code to the
+backend's terminal instead of sending a real text — watch that terminal after
+tapping "Send OTP" and enter the code it prints.
+
+### Token storage note
+
+The access token is kept in memory only (cleared on app restart); the refresh
+token lives in `AsyncStorage` and is used to silently re-authenticate on
+launch (see `utils/authStorage.js`). For a real production release, swap the
+refresh-token storage for `react-native-keychain` (OS-level secure storage) —
+that wasn't done here to avoid a native-linking/rebuild step that couldn't be
+verified in the environment this was written in.
+
+---
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started

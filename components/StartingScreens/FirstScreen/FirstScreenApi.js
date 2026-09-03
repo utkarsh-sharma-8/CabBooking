@@ -1,12 +1,8 @@
-import axios from "axios";
-import { baseUrl } from "../../../utils/constants";
+import apiClient from '../../../utils/apiClient';
 
 const fetchInitialData = async (latitude, longitude) => {
   try {
-    console.log("Making API call..."); // Debugging
-    const response = await axios.post(`${baseUrl}get-all-cabs`, { latitude, longitude });
-
-    console.log("Fetched Data:", response.data);
+    const response = await apiClient.post('/get-all-cabs', {latitude, longitude});
 
     if (response.data.success && response.data.data.length > 0) {
       return response.data.data.map(car => ({
@@ -14,13 +10,13 @@ const fetchInitialData = async (latitude, longitude) => {
         latitude: car.location.coordinates[1], // Extract latitude
         longitude: car.location.coordinates[0], // Extract longitude
         car_no: car.car_no,
-        name: car.name
+        name: car.name,
       }));
     }
 
     return []; // Return empty array if no cars found
   } catch (error) {
-    console.error("Error fetching initial data:", error);
+    console.error('Error fetching initial data:', error);
     return []; // Return empty array in case of error
   }
 };

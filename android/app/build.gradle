@@ -72,6 +72,16 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'org.webkit:android-jsc:+'
 
+// Local, gitignored secrets (e.g. the Maps API key) — see secrets.properties.example
+// for the required keys. Missing file just yields an empty key rather than
+// failing the build, so a fresh checkout still builds (the map simply won't
+// load until a real key is added).
+def secretsPropertiesFile = rootProject.file("app/secrets.properties")
+def secretsProperties = new Properties()
+if (secretsPropertiesFile.exists()) {
+    secretsProperties.load(new FileInputStream(secretsPropertiesFile))
+}
+
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
@@ -84,6 +94,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [
+            MAPS_API_KEY: secretsProperties.getProperty("MAPS_API_KEY", "")
+        ]
     }
     signingConfigs {
         debug {

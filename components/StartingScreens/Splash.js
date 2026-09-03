@@ -8,27 +8,48 @@ import {
   Dimensions,
 } from 'react-native';
 import {useNavigation} from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from './splashStyle';
+import {hasStoredSession, getUser} from '../../utils/authStorage';
+import {bootstrapSession} from '../../utils/apiClient';
+import {connectSocket} from '../../utils/socket';
+import {endSession} from '../../utils/session';
+import {getActiveTrip} from '../../utils/tripApi';
+
 export default function Splash() {
   const navigation = useNavigation();
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem('token');
-        const isDriver = await AsyncStorage.getItem('isDriver');
-        if (isDriver) {
-          navigation.replace('DriverScreen');
-        } else if (token) {
-          navigation.replace('FirstScreen');
-        } else {
+        const hasSession = await hasStoredSession();
+        if (!hasSession) {
           navigation.replace('Auth');
+          return;
         }
+
+        const refreshed = await bootstrapSession();
+        if (!refreshed) {
+          await endSession();
+          return;
+        }
+
+        connectSocket();
+        const user = await getUser();
+
+        // A killed-and-reopened app shouldn't lose an in-progress trip —
+        // check for one before falling through to the normal idle screen.
+        const activeTrip = await getActiveTrip();
+        if (activeTrip) {
+          navigation.replace('TripScreen', activeTrip);
+          return;
+        }
+
+        navigation.replace(user?.isDriver ? 'DriverScreen' : 'FirstScreen');
       } catch (error) {
         console.log(`error at splash is ${error}`);
+        navigation.replace('Auth');
       }
     };
-    const timer = setTimeout(checkAuth, 3000); // Splash duration
+    const timer = setTimeout(checkAuth, 1500); // Splash duration
     return () => clearTimeout(timer);
   }, []);
   return (
