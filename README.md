@@ -1,12 +1,12 @@
 # RideNow — Cab Booking (React Native)
 
 Passenger/driver client for the RideNow cab-booking app. Auth is phone number +
-OTP (no passwords) against the backend in `../../be/cab_booking_be` — see that
-repo's README for the API and how to run it.
+OTP (no passwords) against the backend in `../../be/services` — see that
+README for how to run it, and `../../ARCHITECTURE.md` for how it all fits together.
 
 ## Before you run this
 
-1. Start the backend first (`cd ../../be/cab_booking_be && npm run dev`).
+1. Start the backend first (`cd ../../be/services && docker compose up --build`).
 2. Point the app at your backend: edit `utils/config.js` and set `HOST` to
    your machine's LAN IP (not `localhost` — the app runs on a
    simulator/device, not your dev machine, so it needs a real reachable

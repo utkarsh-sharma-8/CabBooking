@@ -3,7 +3,6 @@ import React, {
   useState,
   useRef,
   useContext,
-  useCallback,
 } from 'react';
 import {
   Text,
@@ -21,13 +20,14 @@ import {
   getSocket,
   requestRide,
   listenForRideAcceptance,
+  listenForNoDriversAvailable,
   registerPassenger,
   listenForDriverLocation,
+  listenForDriverGone,
 } from '../../../utils/socket';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import styles from './FirstScreenStyle';
 import {getUser} from '../../../utils/authStorage';
-import fetchInitialData from './FirstScreenApi';
 import CustomSidebar from './CustomSidebar';
 import {LocationContext} from '../../../utils/locationContext';
 import {
@@ -78,8 +78,7 @@ const FirstScreen = () => {
       const id = user?.passengerId;
       console.log(`passengerId is ${id}`);
       if (id) {
-        setPassengerId(id);
-        registerPassenger(id);
+        setPassengerId(id); // registration itself happens in the effect below
       } else {
         Alert.alert('You need to register again');
       }
@@ -94,6 +93,12 @@ const FirstScreen = () => {
           pickupLocation: sourceCoordsRef.current,
           destinationLocation: destinationCoordsRef.current,
         });
+      });
+      // The server's only immediate reply to a requestRide that couldn't be
+      // matched — without this, "Searching for a driver..." (set in
+      // handleRequestRide) would just sit there forever with no feedback.
+      listenForNoDriversAvailable(data => {
+        setRideStatus(data?.message || 'No drivers available. Try again later.');
       });
       listenForDriverLocation(driverData => {
         console.log(`📍 Driver Location Updated:`, driverData);
@@ -122,12 +127,28 @@ const FirstScreen = () => {
           return updatedDrivers;
         });
       });
+      listenForDriverGone(({phone}) => {
+        setDrivers(prevDrivers => prevDrivers.filter(driver => driver.phone !== phone));
+      });
     };
     fetchPassengerIdandListenForRide();
     return () => {
-      getSocket()?.off('rideAccepted'); // Cleanup to prevent duplicate listeners
+      // Cleanup to prevent duplicate listeners
+      getSocket()?.off('rideAccepted');
+      getSocket()?.off('noDriversAvailable');
+      getSocket()?.off('driver_location');
+      getSocket()?.off('driver_gone');
     };
   }, []);
+  // The server only sends drivers near where this passenger is looking for a
+  // ride — the chosen pickup once there is one, else where they are — so
+  // re-register whenever that moves.
+  const feedLatitude = (sourceCoords || location)?.latitude;
+  const feedLongitude = (sourceCoords || location)?.longitude;
+  useEffect(() => {
+    if (!passengerId || feedLatitude === undefined) return;
+    registerPassenger(passengerId, {latitude: feedLatitude, longitude: feedLongitude});
+  }, [passengerId, feedLatitude, feedLongitude]);
   // Auto-fill Pickup with the current location's address on load — but only
   // until the user starts interacting with it (typing, focusing it, or
   // tapping the map to set it) — after that, their choice always wins. This
@@ -206,16 +227,11 @@ const FirstScreen = () => {
         },
       };
 
-      // Send ride request via socket
-      requestRide(passengerData, data => {
-        if (data && data.driverId) {
-          console.log(`Ride Assigned To Driver ${data.driverId}`);
-          setRideStatus(`Ride Assigned! Driver ID: ${data.driverId}`);
-        } else {
-          console.log('No Drivers Available.');
-          setRideStatus('No Drivers Available. Try Again Later.');
-        }
-      });
+      // Send ride request via socket — the server replies asynchronously with
+      // either 'rideAccepted' (see listenForRideAcceptance, above, which
+      // navigates to TripScreen) or 'noDriversAvailable' (see
+      // listenForNoDriversAvailable, above, which updates rideStatus).
+      requestRide(passengerData);
     } catch (error) {
       console.error('Ride request error:', error);
       setRideStatus('Error requesting ride. Please try again.');
@@ -336,6 +352,12 @@ const FirstScreen = () => {
           </Marker>
         ))}
       </MapView>
+
+      {rideStatus ? (
+        <View style={styles.rideStatusBanner}>
+          <Text style={styles.rideStatusText}>{rideStatus}</Text>
+        </View>
+      ) : null}
 
       {/* Bottom Sheet */}
       <TouchableOpacity style={styles.bottomSheet} onPress={handleRequestRide}>

@@ -21,10 +21,6 @@ export function getAccessToken() {
   return inMemoryAccessToken;
 }
 
-export function setAccessToken(token) {
-  inMemoryAccessToken = token;
-}
-
 export async function getRefreshToken() {
   return AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 }

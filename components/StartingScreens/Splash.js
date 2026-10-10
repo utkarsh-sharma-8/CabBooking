@@ -1,12 +1,5 @@
 import React, {useEffect} from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  Image,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
+import {Text, View} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import styles from './splashStyle';
 import {hasStoredSession, getUser} from '../../utils/authStorage';
@@ -14,6 +7,7 @@ import {bootstrapSession} from '../../utils/apiClient';
 import {connectSocket} from '../../utils/socket';
 import {endSession} from '../../utils/session';
 import {getActiveTrip} from '../../utils/tripApi';
+import {homeRoutesFor} from '../../utils/navigationRef';
 
 export default function Splash() {
   const navigation = useNavigation();
@@ -43,7 +37,7 @@ export default function Splash() {
           return;
         }
 
-        navigation.replace(user?.isDriver ? 'DriverScreen' : 'FirstScreen');
+        navigation.reset({index: 0, routes: homeRoutesFor(user)});
       } catch (error) {
         console.log(`error at splash is ${error}`);
         navigation.replace('Auth');

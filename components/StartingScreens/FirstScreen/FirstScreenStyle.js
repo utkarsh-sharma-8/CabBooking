@@ -84,6 +84,21 @@ const styles = StyleSheet.create({
       fontWeight: 'bold',
       color: '#333',
     },
+    rideStatusBanner: {
+      position: 'absolute',
+      bottom: 100,
+      alignSelf: 'center',
+      backgroundColor: 'rgba(0,0,0,0.75)',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 20,
+      zIndex: 1,
+    },
+    rideStatusText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '600',
+    },
   });
   
 export default styles;  

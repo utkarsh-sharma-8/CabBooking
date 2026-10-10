@@ -4,6 +4,8 @@ import React from 'react';
 import Auth from '../StartingScreens/AuthScreen/Auth';
 import Splash from '../StartingScreens/Splash';
 import FirstScreen from '../StartingScreens/FirstScreen/FirstScreen';
+import Home from '../HomeScreen/Home';
+import DriverHome from '../DiverScreens/DriverHome/DriverHome';
 import DriverVerification from '../DiverScreens/VerificationScreen/Verification';
 import DriverScreen from '../DiverScreens/DriverMainScreen/DriverScreen';
 import TripScreen from '../TripScreen/TripScreen';
@@ -17,6 +19,8 @@ const AppNavigator = () => {
         <Stack.Navigator>
             <Stack.Screen name="Splash" component={Splash} options={{headerShown:false}}/>
             <Stack.Screen name='Auth' component={Auth} options={{headerShown:false}}/>
+            <Stack.Screen name='Home' component={Home} options={{headerShown:false}}/>
+            <Stack.Screen name='DriverHome' component={DriverHome} options={{headerShown:false}}/>
             <Stack.Screen name='FirstScreen' component={FirstScreen} options={{headerShown:false}}/>
             <Stack.Screen name='Verification' component ={DriverVerification} options={{headerShown:false}}/>
             <Stack.Screen name='DriverScreen' component ={DriverScreen} options={{headerShown:false}}/>

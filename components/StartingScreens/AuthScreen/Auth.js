@@ -8,7 +8,6 @@ import {
   Platform,
   SafeAreaView,
   BackHandler,
-  Dimensions,
   StatusBar,
   Animated,
 } from 'react-native';
@@ -16,15 +15,13 @@ import {useNavigation} from '@react-navigation/native';
 import {requestOtp, verifyOtp} from './AuthScreenApi';
 import {setTokens, setUser} from '../../../utils/authStorage';
 import {connectSocket} from '../../../utils/socket';
+import {getErrorMessage} from '../../../utils/errorMessage';
 import styles from './AuthStyles';
-const {width, height} = Dimensions.get('window');
+import {homeRoutesFor} from '../../../utils/navigationRef';
+import {getActiveTrip} from '../../../utils/tripApi';
 
 // Mirrors the backend's OTP_RESEND_COOLDOWN_SECONDS default (be/cab_booking_be/.env.example).
 const RESEND_COOLDOWN_SECONDS = 30;
-
-function extractErrorMessage(error, fallback) {
-  return error?.response?.data?.message || fallback;
-}
 
 export default function Auth() {
   const navigation = useNavigation();
@@ -122,7 +119,7 @@ export default function Auth() {
       startCooldown();
     } catch (error) {
       if (isMountedRef.current) {
-        setFormError(extractErrorMessage(error, 'Could not send OTP. Please try again.'));
+        setFormError(getErrorMessage(error, 'Could not send OTP. Please try again.'));
       }
     } finally {
       if (isMountedRef.current) setIsLoading(false);
@@ -142,7 +139,7 @@ export default function Auth() {
       startCooldown();
     } catch (error) {
       if (isMountedRef.current) {
-        setFormError(extractErrorMessage(error, 'Could not resend OTP. Please try again.'));
+        setFormError(getErrorMessage(error, 'Could not resend OTP. Please try again.'));
       }
     } finally {
       if (isMountedRef.current) setIsLoading(false);
@@ -164,13 +161,29 @@ export default function Auth() {
       });
       await setUser(response.user);
       connectSocket();
+      // Logging back in mid-trip (new device, or after a logout) must land on
+      // the trip, same as Splash does for a reopened app. The socket's own
+      // on-connect active_trip push can't cover this: it may arrive while
+      // this screen is still showing, and socket.js ignores it on Auth.
+      // Best-effort — a failed lookup mustn't fail a login that succeeded;
+      // the push still resumes the trip once the user is on Home.
+      let activeTrip = null;
+      try {
+        activeTrip = await getActiveTrip();
+      } catch (error) {
+        console.log(`Auth: active trip check failed: ${error}`);
+      }
       // Navigation is safe even if the component unmounted in the meantime —
       // it goes through the navigator, not local state — but skip local
       // state updates below if that happened.
-      navigation.reset({index: 0, routes: [{name: 'FirstScreen'}]});
+      if (activeTrip) {
+        navigation.reset({index: 0, routes: [{name: 'TripScreen', params: activeTrip}]});
+      } else {
+        navigation.reset({index: 0, routes: homeRoutesFor(response.user)});
+      }
     } catch (error) {
       if (isMountedRef.current) {
-        setFormError(extractErrorMessage(error, 'Incorrect OTP. Please try again.'));
+        setFormError(getErrorMessage(error, 'Incorrect OTP. Please try again.'));
       }
     } finally {
       if (isMountedRef.current) setIsLoading(false);

@@ -1,15 +1,24 @@
-import { StyleSheet, Text, View, Dimensions, PermissionsAndroid, TouchableOpacity } from 'react-native';
-import React, { useEffect, useState, useRef,useContext } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Button, Modal } from 'react-native';
+import { Alert, Button, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { LocationContext } from '../../../utils/locationContext'; //Use Location Context
-import { listenForRideRequests, registerDriver, updateDriverLocation, acceptRide, getSocket } from '../../../utils/socket';
+import { listenForRideRequests, registerDriver, updateDriverLocation, acceptRide, getSocket, goOffline } from '../../../utils/socket';
 import { getUser } from '../../../utils/authStorage';
-import { endSession } from '../../../utils/session';
 
+// The driver is ONLINE for as long as this screen is open: it registers on
+// mount, and leaving it any way other than into a trip (the top bar's back
+// button, "Go offline", Android back) goes offline first — see beforeRemove
+// below. DriverHome, underneath it in the stack, is the offline state.
 export default function DriverScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const mapRef = useRef(null);
+  const leavingRef = useRef(false);
+  const [leaving, setLeaving] = useState(false);
   const {location} = useContext(LocationContext);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [currentRequest, setCurrentRequest] = useState(null);
@@ -47,6 +56,49 @@ export default function DriverScreen() {
     };
   }, [phone]); // Must re-run once `phone` actually resolves (it starts empty)
 
+  useEffect(() => {
+    return navigation.addListener('beforeRemove', e => {
+      const {action} = e.data;
+      // Into a trip (accept replaces this screen) the driver must stay
+      // registered — live trip tracking depends on it. A RESET is logout or
+      // a session ending; the socket is being torn down anyway.
+      if (action.type === 'RESET' || (action.type === 'REPLACE' && action.payload?.name === 'TripScreen')) {
+        return;
+      }
+      if (leavingRef.current) return; // second pass, after going offline
+      e.preventDefault();
+      setLeaving(true);
+      goOffline().then(reply => {
+        setLeaving(false);
+        if (!reply?.ok) {
+          Alert.alert('Still online', reply?.error || 'Could not go offline. Please try again.');
+          return;
+        }
+        leavingRef.current = true;
+        navigation.dispatch(action);
+      });
+    });
+  }, [navigation]);
+
+  const handleGoOffline = () => {
+    if (leaving) return;
+    // DriverHome is normally underneath; after a resumed trip it may not be.
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.replace('DriverHome');
+    }
+  };
+
+  const recenter = () => {
+    mapRef.current?.animateToRegion({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      latitudeDelta: 0.02,
+      longitudeDelta: 0.02,
+    }, 400);
+  };
+
   const handleAcceptRide = () => {
     if (!currentRequest) return;
     acceptRide(
@@ -55,7 +107,9 @@ export default function DriverScreen() {
       currentRequest.pickupLocation,
       currentRequest.destinationLocation,
       data => {
-        navigation.navigate('TripScreen', {
+        // replace, not navigate: TripScreen hands back to a fresh
+        // [DriverHome, DriverScreen] stack when the trip ends.
+        navigation.replace('TripScreen', {
           tripId: data?.tripId,
           driver: null,
           passenger: data?.passenger || null,
@@ -63,23 +117,28 @@ export default function DriverScreen() {
           destinationLocation: currentRequest.destinationLocation,
         });
       },
+      error => {
+        Alert.alert('Could not start trip', error?.message || 'Please try again.');
+        // Only a transient failure is worth retrying; a ride that's gone to
+        // another trip (retryable: false) is dropped.
+        if (error?.retryable) {
+          setShowRequestModal(true);
+        } else {
+          setCurrentRequest(null);
+        }
+      },
     );
     setShowRequestModal(false);
   };
 
-  const handleLogout = async () => {
-    await endSession();
-  };
-
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
       {location && (
         <MapView
+          ref={mapRef}
           provider={PROVIDER_GOOGLE}
-          style={styles.map}
+          style={StyleSheet.absoluteFill}
+          showsMyLocationButton={false}
           initialRegion={{
             latitude: location.latitude,
             longitude: location.longitude,
@@ -97,6 +156,46 @@ export default function DriverScreen() {
           />
         </MapView>
       )}
+
+      {/* Top bar */}
+      <View style={[styles.topBar, {top: insets.top + 10}]}>
+        <TouchableOpacity style={styles.roundButton} onPress={handleGoOffline} accessibilityLabel="Back to dashboard">
+          <Icon name="arrow-back" size={22} color="#1E1E1E" />
+        </TouchableOpacity>
+        <View style={styles.statusPill}>
+          <View style={styles.onlineDot} />
+          <Text style={styles.statusPillText}>Online</Text>
+        </View>
+        <TouchableOpacity style={styles.roundButton} onPress={recenter} accessibilityLabel="Recenter map">
+          <Icon name="my-location" size={22} color="#1E1E1E" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom status card */}
+      <View style={[styles.bottomCard, {paddingBottom: insets.bottom + 18}]}>
+        <View style={styles.handle} />
+        <View style={styles.searchingRow}>
+          <ActivityIndicator color="#B8860B" />
+          <View style={styles.searchingTextWrap}>
+            <Text style={styles.searchingTitle}>Finding rides near you</Text>
+            <Text style={styles.searchingSubtitle}>Keep this screen open to receive requests</Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          style={[styles.offlineButton, leaving && styles.offlineButtonDisabled]}
+          onPress={handleGoOffline}
+          disabled={leaving}
+          activeOpacity={0.85}>
+          {leaving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <>
+              <Icon name="power-settings-new" size={20} color="#FFFFFF" />
+              <Text style={styles.offlineButtonText}>Go offline</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
       {/* Ride Request Modal */}
       <Modal visible={showRequestModal} transparent={true} animationType="slide">
         <View style={styles.modalContainer}>
@@ -130,23 +229,106 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  logoutButton: {
+  topBar: {
     position: 'absolute',
-    top: 48,
+    left: 16,
     right: 16,
-    zIndex: 10,
-    backgroundColor: '#ff4444',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  logoutButtonText: {
-    color: 'white',
+  roundButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    height: 44,
+  },
+  onlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4CAF50',
+    marginRight: 8,
+  },
+  statusPillText: {
+    color: '#FFFFFF',
     fontWeight: 'bold',
+    fontSize: 16,
   },
-  map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
+  bottomCard: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    elevation: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#DDD',
+    marginBottom: 14,
+  },
+  searchingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchingTextWrap: {
+    marginLeft: 14,
+    flex: 1,
+  },
+  searchingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E1E1E',
+  },
+  searchingSubtitle: {
+    fontSize: 13,
+    color: '#777',
+    marginTop: 2,
+  },
+  offlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E53935',
+    borderRadius: 12,
+    height: 50,
+    marginTop: 18,
+  },
+  offlineButtonDisabled: {
+    opacity: 0.7,
+  },
+  offlineButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 8,
   },
   errorText: {
     fontSize: 16,

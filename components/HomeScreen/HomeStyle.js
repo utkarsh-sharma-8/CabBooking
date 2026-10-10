@@ -1,0 +1,81 @@
+import {StyleSheet} from 'react-native';
+
+// Dashboard palette shared with DriverHome: the Splash screen's charcoal and
+// gold, on a light grey page.
+const styles = StyleSheet.create({
+  container: {flex: 1, backgroundColor: '#F4F4F4'},
+  hero: {
+    backgroundColor: '#1E1E1E',
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  heroTop: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18},
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFD700',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {fontSize: 20, fontWeight: 'bold', color: '#1E1E1E'},
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  greeting: {color: '#A0A0A0', fontSize: 16},
+  name: {color: '#FFFFFF', fontSize: 28, fontWeight: 'bold', marginBottom: 20},
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  searchText: {flex: 1, marginLeft: 10, fontSize: 18, fontWeight: '600', color: '#1E1E1E'},
+  nowChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F1F1',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  nowChipText: {marginLeft: 4, fontWeight: '600', color: '#1E1E1E'},
+  section: {paddingHorizontal: 20, marginTop: 22},
+  sectionTitle: {fontSize: 18, fontWeight: 'bold', color: '#1E1E1E', marginBottom: 12},
+  actionsRow: {flexDirection: 'row', gap: 12},
+  actionTile: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    minHeight: 96,
+    justifyContent: 'space-between',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 1},
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  actionTileHighlighted: {backgroundColor: '#FFD700'},
+  actionLabel: {fontSize: 15, fontWeight: '600', color: '#1E1E1E', marginTop: 10},
+  statCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8DC',
+    borderRadius: 14,
+    padding: 16,
+  },
+  statText: {marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#1E1E1E', flex: 1},
+  loader: {marginTop: 20},
+});
+
+export default styles;

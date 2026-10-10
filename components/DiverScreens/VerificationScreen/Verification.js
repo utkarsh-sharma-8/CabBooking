@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import VerificationApi from './VerificationApi';
 import { getUser, setUser } from '../../../utils/authStorage';
+import { getErrorMessage } from '../../../utils/errorMessage';
 import { styles } from './VerificationStyle';
 
 const DriverVerification = () => {
@@ -48,7 +48,7 @@ const DriverVerification = () => {
           Alert.alert('Success', 'Driver added successfully!');
           navigation.reset({
             index: 0,
-            routes: [{ name: "DriverScreen" }],
+            routes: [{ name: "DriverHome" }],
           });
         } else {
           Alert.alert('Error', 'Your session looks incomplete — please log in again.');
@@ -58,9 +58,7 @@ const DriverVerification = () => {
       setName('');
       setCarNo('');
     } catch (error) {
-      const message = error?.response?.data?.message || 'Could not register as driver. Please try again.';
-      Alert.alert('Error', message);
-      console.log(`error is ${error}`);
+      Alert.alert('Error', getErrorMessage(error, 'Could not register as driver. Please try again.'));
     } finally {
       setLoading(false);
     }
